@@ -1,0 +1,47 @@
+name: Build ZMK firmware
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["**"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: zmkfirmware/zmk-build-arm:stable
+    steps:
+      - name: Checkout config
+        uses: actions/checkout@v4
+
+      - name: West init/update
+        run: |
+          set -eux
+          west init -l config
+          west update
+          west zephyr-export
+
+      - name: Build left (mysplit_left)
+        run: |
+          set -eux
+          export ZEPHYR_EXTRA_MODULES="$GITHUB_WORKSPACE"
+          west build -s zmk/app -b nice_nano_v2 -- -DZMK_CONFIG=$GITHUB_WORKSPACE/config -DSHIELD=mysplit_left -DBOARD_ROOT=$GITHUB_WORKSPACE -DZEPHYR_EXTRA_MODULES=$GITHUB_WORKSPACE
+          cp -v build/zephyr/zmk.uf2 mysplit_left-nice_nano_v2.uf2
+
+      - name: Clean
+        run: rm -rf build
+
+      - name: Build right (mysplit_right)
+        run: |
+          set -eux
+          export ZEPHYR_EXTRA_MODULES="$GITHUB_WORKSPACE"
+          west build -s zmk/app -b nice_nano_v2 -- -DZMK_CONFIG=$GITHUB_WORKSPACE/config -DSHIELD=mysplit_right -DBOARD_ROOT=$GITHUB_WORKSPACE -DZEPHYR_EXTRA_MODULES=$GITHUB_WORKSPACE
+          cp -v build/zephyr/zmk.uf2 mysplit_right-nice_nano_v2.uf2
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: zmk-firmware
+          path: |
+            mysplit_left-nice_nano_v2.uf2
+            mysplit_right-nice_nano_v2.uf2
